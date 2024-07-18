@@ -13,6 +13,11 @@ POWER_STATUS power_status = unknown;
 unsigned long room_temp_set_timeout_Millis = millis();
 bool troom_was_set_by_MQTT = false;
 bool troom_was_set_by_DS18X20 = false;
+//Led
+#define LED_PIN 2
+bool wifiConnected = false;
+unsigned long previousMillis = 0;
+const long interval = 1000;  // interval for blinking (1 second)
 
 void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int length) {
   payload[length] = 0;  // we need a string
@@ -449,6 +454,8 @@ void setup() {
   Serial.printf("ESP.getCoreVersion()=%s\n", ESP.getCoreVersion().c_str());
   Serial.printf("ESP.getSdkVersion()=%s\n", ESP.getSdkVersion());
   Serial.printf("ESP.checkFlashCRC()=%i\n", ESP.checkFlashCRC());
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);  // start with LED off
 
 #if TEMP_MEASURE_PERIOD > 0
   setup_ds18x20();
@@ -488,7 +495,33 @@ void loop() {
       mhi_ac_ctrl_core.reset_old_values();  // after a reconnect
     ArduinoOTA.handle();
   }
+    // Check WiFi connection status
+    if (WiFi.status() != WL_CONNECTED) {
+        if (wifiConnected) {
+            // WiFi just got disconnected
+            wifiConnected = false;
+            digitalWrite(LED_PIN, HIGH);  // turn LED on
+        }
+    } else {
+        if (!wifiConnected) {
+            // WiFi just got connected
+            wifiConnected = true;
+            digitalWrite(LED_PIN, LOW);  // turn LED off (start with LED off for blinking)
+            previousMillis = millis();
+        }
 
+        // Blink the LED when connected to WiFi
+        unsigned long currentMillis = millis();
+        if (currentMillis - previousMillis >= interval) {
+            previousMillis = currentMillis;
+            // If the LED is off turn it on, and vice-versa
+            if (digitalRead(LED_PIN) == LOW) {
+                digitalWrite(LED_PIN, HIGH);
+            } else {
+                digitalWrite(LED_PIN, LOW);
+            }
+        }
+    }
 #if TEMP_MEASURE_PERIOD > 0
   if (!troom_was_set_by_MQTT) {  // Only use ds18x20 if MQTT is NOT used for setting Troom
     byte ds18x20_value = getDs18x20Temperature(25);
